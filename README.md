@@ -14,8 +14,9 @@ path.**
 Hermes routes vision through two channels:
 
 1. **Native fast path** — the image rides back from `vision_analyze` as a
-   multimodal envelope straight into the main model's context. The main
-   model *sees the pixels itself*. No aux call, no information loss.
+   structured tool result carrying the image data itself (a `_multimodal`
+   envelope in Hermes' source) — so the main model *sees the pixels
+   itself*. No aux call, no information loss.
 2. **Aux fallback path** — a separate `auxiliary.vision` model looks at
    the image and returns a **text paraphrase**. Pixels never enter the
    main model's context. Lossy: layout, small text, and exact colors
@@ -208,8 +209,10 @@ any proposed change and include its output.
 
 ## Acknowledgements
 
-- The two-path vision mechanism, the fast-path switch, and the multimodal
-  envelope are part of [Hermes Agent](https://github.com/NousResearch/hermes-agent)
+- The two-path vision mechanism, the fast-path switch, and the
+  tool-result mechanism that carries the image itself (not a text
+  paraphrase) back into the main model's context are part of
+  [Hermes Agent](https://github.com/NousResearch/hermes-agent)
   by Nous Research — this skill packages diagnosis and setup guidance
   around them; it ships no private logic of its own.
 - [models.dev](https://models.dev) — the community-maintained model
