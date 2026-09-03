@@ -185,17 +185,24 @@ User-attached images (CLI / TUI / messaging platforms) follow
   (e.g. a bot profile) — apply these settings per profile as needed.
 - The session's skill loader is cached at startup: a newly installed skill
   becomes visible in the NEXT session, not the current one.
-- `native` with a text-only main model does not crash: a last-chance text
-  fallback strips/converts image parts at API time
-  (`run_agent.py::_prepare_messages_for_api`).
+- `native` with a text-only main model does not crash: API-time
+  preprocessing strips/converts image parts (last-chance text fallback in
+  `run_agent.py::_preprocess_anthropic_content` /
+  `_strip_images_from_messages`).
 
 ## Troubleshooting
-- **`ModuleNotFoundError` / import error from the script** → wrong
-  interpreter. Run it with the venv that belongs to your Hermes install
-  (`venv/bin/python` on Linux/macOS, `venv\Scripts\python.exe` on Windows).
-  If Hermes lives outside the default location, set `HERMES_HOME`.
-- **"Cannot locate Hermes installation"** → `export HERMES_HOME=/path/to/.hermes`
-  (or the equivalent on Windows) and retry.
+- **`Could not import Hermes internals (ModuleNotFoundError: ...)`** → the
+  script could not load Hermes APIs. Two causes, in likelihood order:
+  wrong interpreter — use the venv that belongs to your Hermes install
+  (`venv/bin/python` on Linux/macOS, `venv\Scripts\python.exe` on
+  Windows); or the Hermes data dir was not found — set
+  `HERMES_HOME=/path/to/.hermes` and retry (the script falls back to
+  `~/.hermes` when `$HERMES_HOME` does not exist).
+- **`HERMES_HOME does not exist - falling back to ~/.hermes`** → you set
+  `HERMES_HOME` to a path that is not there. Mind the asymmetry: the
+  Hermes core uses such a path as-is (empty config), while this checker
+  falls back and keeps diagnosing — fix the variable so the verdict
+  matches the runtime.
 - **Config edits not taking effect** → settings are re-read every turn, but
   mid-session capability overrides like `model.supports_vision` only apply
   on the next model resolution; rerun the script to confirm.

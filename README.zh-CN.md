@@ -141,10 +141,15 @@ hermes config set model.supports_vision true
 
 ## 常见问题排查
 
-- **脚本报 `ModuleNotFoundError`** → 用错了解释器。请用 Hermes 安装自带的
-  venv（Linux/macOS：`venv/bin/python`；Windows：`venv\Scripts\python.exe`）。
-- **"Cannot locate Hermes installation"** → 设置 `HERMES_HOME` 指向你的
-  Hermes 数据目录后重试。
+- **脚本报 `Could not import Hermes internals (ModuleNotFoundError: ...)`**
+  → 脚本无法加载 Hermes API：要么用错了解释器（请用 Hermes 安装自带的
+  venv：Linux/macOS `venv/bin/python`；Windows `venv\Scripts\python.exe`），
+  要么没找到 Hermes 数据目录（设置 `HERMES_HOME=/path/to/.hermes` 后重试；
+  变量指向不存在的路径时脚本会回落 `~/.hermes`）。
+- **`HERMES_HOME does not exist - falling back to ~/.hermes`** → 你设置的
+  `HERMES_HOME` 指向不存在的路径。注意行为差异：Hermes 核心会照用该路径
+  （空配置），而本脚本会回落 `~/.hermes` 继续诊断——请修正变量取值，使
+  判定与运行时一致。
 - **已知多模态模型判定为 `None`** → 全新安装：正常启动一次 Hermes 以生成
   `models_dev_cache.json`；仍无记录：用 `model.supports_vision true`
   覆盖（不依赖缓存）。

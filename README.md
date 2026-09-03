@@ -154,11 +154,16 @@ first line of the tool result:
 
 ## Troubleshooting
 
-- **`ModuleNotFoundError` from the script** → wrong interpreter. Use the
-  venv that belongs to your Hermes install
-  (`venv/bin/python` on Linux/macOS, `venv\Scripts\python.exe` on Windows).
-- **"Cannot locate Hermes installation"** → set `HERMES_HOME` to your
-  Hermes data directory and retry.
+- **`Could not import Hermes internals (ModuleNotFoundError: ...)`** → the
+  script could not load Hermes APIs: either wrong interpreter (use the
+  venv that belongs to your Hermes install — `venv/bin/python` on
+  Linux/macOS, `venv\Scripts\python.exe` on Windows) or the Hermes data
+  dir was not found (set `HERMES_HOME=/path/to/.hermes` and retry; the
+  script falls back to `~/.hermes` when the variable points nowhere).
+- **`HERMES_HOME does not exist - falling back to ~/.hermes`** → you set
+  `HERMES_HOME` to a nonexistent path. The Hermes core uses such a path
+  as-is (empty config) while this checker falls back — fix the variable
+  so the verdict matches the runtime.
 - **Verdict `None` on a known multimodal model** → fresh install: run
   Hermes once to populate `models_dev_cache.json`; still missing: use the
   `model.supports_vision true` override (independent of the cache).

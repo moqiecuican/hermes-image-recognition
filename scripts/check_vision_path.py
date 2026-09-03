@@ -27,6 +27,12 @@ def locate_hermes_home() -> str:
 
 
 _home = locate_hermes_home()
+_h = os.environ.get("HERMES_HOME", "").strip()
+if _h and not os.path.isdir(_h):
+    print(f"WARNING: HERMES_HOME does not exist - falling back to ~/.hermes ({_home})")
+    print("Note: the Hermes core uses a nonexistent $HERMES_HOME as-is (empty")
+    print("config); fix the variable so this verdict matches the runtime.")
+    print()
 _repo = os.path.join(_home, "hermes-agent")
 if os.path.isdir(_repo):
     sys.path.insert(0, _repo)
