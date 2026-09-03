@@ -44,4 +44,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-09-03
 
 - Internal first version (Chinese, machine-local paths, single-language);
+  briefly used for small-scale internal testing before deployment;
   superseded by 0.2.0 and never published
