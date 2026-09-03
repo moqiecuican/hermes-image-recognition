@@ -1,7 +1,7 @@
 ---
 name: image-recognition
 description: "View images natively and diagnose vision path issues."
-version: 0.3.0
+version: 0.2.1
 author: moqiecuican
 license: MIT
 platforms: [linux, macos, windows]
