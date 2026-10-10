@@ -6,6 +6,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > 🌏 [中文版（CHANGELOG.zh-CN.md）](CHANGELOG.zh-CN.md)
 
+## [0.4.0] - 2026-10-10
+
+### Added
+- `scripts/probe_tool_media.py`: decisive two-request endpoint probe (1×1
+  red PNG, tool-result vs user-message channel) that ARBITRATES a profile
+  veto instead of trusting the declaration — the declaration is a
+  hypothesis about the endpoint, the probe is ground truth. Built-in
+  verdict rules: a 200 alone is not enough (the model must name the probe
+  colour — acceptance ≠ capability); a 400 is classified as a
+  content/format error (declaration accurate) vs a model-id error (retired
+  id, not channel evidence). Keys are read in-process and never printed.
+- "Stale veto declaration" flow in Pitfalls: when the probe contradicts
+  `supports_vision_tool_messages=False`, correct the plugin profile itself —
+  backup + hash manifest → census every model still in use under the
+  provider → flip the flag → restart processes → layered verification →
+  registry entry. Config cannot lift a veto; the plugin profile can.
+- Unknown-model gate: new branch for FALLBACK + `model vision: True` +
+  veto note ("capability present, channel vetoed") that routes to the
+  probe before any decision.
+- Case study in `references/vision-channels-and-vetoes.md`: a stale veto
+  held a fully multimodal model on the lossy fallback path until the probe
+  disproved the declaration (plus the probe section now links the script).
+- `references/confirmed-vision-models.md`: registry entry documenting the
+  full probe → fix → post-restart acceptance evidence chain.
+- Operational worked examples so no agent has to re-explore: concrete
+  agent-host restart recipes (TUI `/exit` + `hermes --tui`, dashboard
+  stop/start, external gateway restart; multi-window note; mtime-vs-`ps`
+  staleness check), a concrete model-census procedure for the flip safety
+  check (config grep + `GET /models` + probe each id), and a
+  worked-example pointer on the gate branch.
+
+### Changed
+- Small-text misreads are path-neutral: confident wrong reads happen
+  on BOTH paths (observed: native read "8" in a "80" subtitle on a 421×249
+  frame while the aux transcription got it right). Never build a
+  path-quality argument on a single small-text read — re-view a crop
+  (`region=`) first; treat both paths' opinions as hypotheses.
+- Plugin profile changes take effect only when the agent host PROCESS
+  restarts (module-level `sys.modules` cache in the provider loader): a
+  gateway restart alone is not enough, and a new session inside the same
+  TUI/dashboard process does not reload plugin Python. The checker (fresh
+  subprocess) verifies disk state immediately; the real-image acceptance
+  test only counts inside the restarted process.
+- The "veto is the cause" guidance now says to arbitrate with the probe
+  first and only then fall back to the user-message channel / aux
+  transcription.
+
+## [0.3.1] - 2026-10-09
+
+### Fixed
+- `check_vision_path.py` two-argument branch now calls the upstream gate
+  `_native_tool_result_images(provider, model, cfg)` instead of recomputing
+  the predicate locally (issue #1). The old formula skipped the profile hard
+  veto (`_profile_rejects_tool_media`), so it reported NATIVE for providers
+  whose tool-result image content is rejected with HTTP 400 (xiaomi/MiMo) —
+  a user trusting the verdict got an error instead of pixels. Older installs
+  without the parameterized gate now fall back to an explicit veto check.
+- Both READMEs: the decision tree shows the three upstream layers in order
+  (routing → profile veto → static table / capability lookup), names the 13
+  explicit `_TOOL_RESULT_MEDIA_PROVIDERS` ids ("aggregators" is not a literal
+  table value) and the `_GEMINI_PROVIDERS` gemini-3 model-tag check.
+- SKILL.md: `_describe_image_for_anthropic_fallback` path corrected to
+  `agent/vision_message_prep.py` (the old `run_agent.py` location no longer
+  resolves).
+
+### Added
+- The checker prints a note when a profile veto forces FALLBACK, so a
+  400-rejecting provider is not mistaken for a missing capability.
+
+## [0.3.0] - 2026-09-10
+
+### Added
+- "Procedure: first image call in a session (unknown-model gate)" and
+  "Quick verdict" sections in SKILL.md: gate once per session / after a model
+  switch. When the verdict is FALLBACK and the capability lookup returns None
+  (unknown model), ask the user whether the model is multimodal and register
+  it before trusting vision output — the session that produced this release
+  lost ~13 verification rounds to a silently lossy fallback.
+- `references/confirmed-vision-models.md` — append-only registry of
+  user-confirmed vision-capable models (evidence + config record per entry).
+- `check_vision_path.py` detects the provider-alias mapping gap
+  (`PROVIDER_TO_MODELS_DEV` missing an alias while the disk cache holds a
+  vision-capable record) and prints the escaped-dot
+  `model_overrides.<provider>.<model>.supports_vision` workaround.
+
+### Notes
+- Prefer scoped `model_overrides.<provider>.<model>.supports_vision` over a
+  global `model.supports_vision` (the global flag misdeclares text-only
+  models after a switch). Model ids containing dots need `\.` escaping in
+  `hermes config set`; the on-disk models.dev cache is NOT hand-editable
+  (the TTL refresh discards manual entries).
+
 ## [0.2.1] - 2026-09-04
 
 ### Fixed

@@ -44,34 +44,62 @@ APIs may shift between versions — rerun the diagnostic after upgrading.
 
 ## How the path decision works
 
-`vision_analyze` picks the native fast path when **all** of the following
-hold (see `tools/vision_tools.py::_should_use_native_vision_fast_path()`):
+`vision_analyze` picks the native fast path only when **all** of the
+following hold (see `tools/vision_tools.py::_native_tool_result_images(
+provider, model, cfg)` — one gate, shared by
+`_should_use_native_vision_fast_path()`):
 
 ```
-agent.image_input_mode == native
-AND (
-     provider accepts images inside tool results   ← static allowlist
-                                                     (anthropic / openai /
-                                                      openai-codex / gemini-3 /
-                                                      aggregators; many direct
-                                                      providers are NOT listed)
+1. agent.image_input_mode == native
+2. the provider's profile does not veto tool-result media
+   (`_profile_rejects_tool_media`: a profile declaring
+    supports_vision_tool_messages=False accepts images in user messages
+    but rejects list-type tool-result content with HTTP 400 — xiaomi/MiMo;
+    supports_vision alone must NOT override this veto)
+3. AND either
+     provider accepts images inside tool results   ← 13 explicit ids in
+                                                     _TOOL_RESULT_MEDIA_PROVIDERS
+                                                     (openrouter, nous, vertex,
+                                                      bedrock, anthropic-vertex,
+                                                      google-vertex, anthropic,
+                                                      claude, anthropic-direct,
+                                                      openai, openai-chat,
+                                                      openai-codex,
+                                                      azure-openai), or the
+                                                     _GEMINI_PROVIDERS gemini-3
+                                                     model-tag check
+                                                     ("aggregators" is not a
+                                                      literal table value; many
+                                                      direct providers are NOT
+                                                      listed)
      OR
-     models.dev metadata says the model supports vision
-       (disk-cached at <hermes-home>/models_dev_cache.json;
+     the per-model capability lookup says vision-capable
+       (config override → catalog; disk-cached at
+        <hermes-home>/models_dev_cache.json;
         verdicts never require network at runtime)
    )
 ```
 
-The allowlist is conservative by design — providers such as zai are **not**
-on it, so their models pass via the models.dev branch (e.g.
-`glm-5.3-flash`). Models absent from the database can be declared manually
-with a config override, which takes priority over the cache.
+The static table is conservative by design — providers such as zai are **not**
+on it, so their models pass via the capability branch (e.g. `glm-5.3-flash`).
+Profiles that veto tool-result media (xiaomi/MiMo) fall back no matter what
+the capability lookup says. Models absent from the database can be declared
+manually with a config override, which takes priority over the cache.
+
+Probe/checker note: call the gate — never re-derive the predicate locally.
+A local formula misses layer 2 and reports NATIVE for providers whose
+tool-result image content 400s.
 
 ## Features
 
 - **One-command diagnosis** — `check_vision_path.py` prints a four-line
   verdict (image input route / tool-result images / model vision / final
   path) for your active model or any provider+model pair
+- **Endpoint arbitration** — `probe_tool_media.py` runs the decisive
+  two-request probe (1×1 red PNG, both image channels) that proves or
+  disproves a provider tool-result veto at the endpoint instead of
+  trusting the declaration (acceptance requires the model to name the
+  probe colour)
 - **First-run guidance** — a decision tree covering every combination of
   misconfiguration, including the aux-suppression trap and fresh-install
   cache misses
@@ -118,6 +146,25 @@ check any pair:
 ```bash
 check_vision_path.py zai glm-5.3-flash
 ```
+
+### Endpoint probe — arbitrate a veto
+
+When the verdict is FALLBACK because of a profile veto
+(`supports_vision_tool_messages=False`), the declaration itself may be
+stale. The probe settles it at the endpoint level (same arg convention;
+API keys are read in-process and never printed):
+
+```bash
+~/.hermes/hermes-agent/venv/bin/python \
+  ~/.hermes/skills/autonomous-ai-agents/image-recognition/scripts/probe_tool_media.py <provider> <model>
+```
+
+Verdict rules: a tool-result-channel answer that NAMES the probe colour
+means the veto is stale — follow the "stale veto declaration" flow in
+SKILL.md Pitfalls. A 200 that fails to name the colour is
+accepted-but-blind; a 400 means the declaration is still accurate
+(content/format error body) or the model id is retired (model-id error
+body — not channel evidence).
 
 ### Reading the verdict — decision matrix
 

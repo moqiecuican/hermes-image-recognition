@@ -39,30 +39,46 @@ Hermes 的视觉有两条通道：
 
 ## 路径判定原理
 
-`vision_analyze` 在以下条件**全部满足**时选择原生快速路径（见
-`tools/vision_tools.py::_should_use_native_vision_fast_path()`）：
+`vision_analyze` 仅在以下条件**全部满足**时选择原生快速路径（见
+`tools/vision_tools.py::_native_tool_result_images(provider, model, cfg)`
+——单一门禁，`_should_use_native_vision_fast_path()` 同源）：
 
 ```
-agent.image_input_mode == native
-且二者其一：
-     provider 在"工具结果可携带图像"静态白名单
-     （anthropic / openai / openai-codex / gemini-3 / 聚合器；
-      很多直连 provider 并不在名单里）
+1. agent.image_input_mode == native
+2. provider 的 profile 未否决"工具结果携带媒体"
+   （_profile_rejects_tool_media：profile 声明
+    supports_vision_tool_messages=False 时，用户消息收图，
+    但列表型工具结果内容会被 HTTP 400 拒绝——xiaomi/MiMo；
+    单有 supports_vision 不足以推翻该否决）
+3. 且二者其一：
+     provider 在"工具结果可携带图像"静态表内
+     （_TOOL_RESULT_MEDIA_PROVIDERS 的 13 个显式 id：openrouter、nous、
+       vertex、bedrock、anthropic-vertex、google-vertex、anthropic、
+       claude、anthropic-direct、openai、openai-chat、openai-codex、
+       azure-openai；外加 _GEMINI_PROVIDERS 的 gemini-3 模型名标签判定。
+       "聚合器"不是表项字面值；很多直连 provider 不在表内）
      或
-     models.dev 元数据判定该模型支持视觉
-     （落盘缓存于 <hermes-home>/models_dev_cache.json；
-      运行时判定永不依赖网络）
+     按模型的能力查询判定支持视觉
+     （配置覆盖 → 目录；落盘缓存于
+      <hermes-home>/models_dev_cache.json；运行时判定永不依赖网络）
 ```
 
-白名单设计上是保守的——zai 这类 provider **不在名单内**，其模型靠
-models.dev 分支通过（如 `glm-5.3-flash`）。库里没有的模型可用配置覆盖
-手动声明，覆盖优先级高于缓存。
+静态表设计上保守——zai 这类 provider **不在表内**，其模型靠能力分支通过
+（如 `glm-5.3-flash`）。profile 若否决工具结果媒体（xiaomi/MiMo），
+无论能力查询怎么说都会回落。库里没有的模型可用配置覆盖手动声明，
+覆盖优先级高于缓存。
+
+探针/诊断脚本注意：一律调用门禁函数，**不要**在本地重算判定——
+本地公式会跳过第 2 层，对"工具结果图像会被 400"的 provider 误报 NATIVE。
 
 ## 功能特性
 
 - **一条命令诊断** —— `check_vision_path.py` 输出四行判定（附图路由 /
   工具结果图像 / 模型视觉判定 / 最终路径），可查当前模型，也可查任意
   provider+model 组合
+- **端点仲裁** —— `probe_tool_media.py` 跑决定性双请求探针（1×1 红色 PNG，
+  双通道实测），在端点层面证实或证伪 provider 的工具结果否决声明，而不是
+  相信声明（判定标准：模型必须说出探针颜色才算真的看见）
 - **初装引导** —— 覆盖所有错误配置组合的决策树，包括辅助压制大坑与
   全新安装缓存缺失
 - **换模型自检** —— 更换 provider/model 后，先确认视觉仍走原生再依赖它
@@ -105,6 +121,21 @@ git clone https://github.com/moqiecuican/hermes-image-recognition.git \
 ```bash
 check_vision_path.py zai glm-5.3-flash
 ```
+
+### 端点探针 —— 仲裁否决声明
+
+当判定因 profile 否决（`supports_vision_tool_messages=False`）而走
+FALLBACK 时，声明本身可能已过时。探针在端点层面裁决（参数约定同上；
+API 密钥进程内读取、绝不打印）：
+
+```bash
+~/.hermes/hermes-agent/venv/bin/python \
+  ~/.hermes/skills/autonomous-ai-agents/image-recognition/scripts/probe_tool_media.py <provider> <model>
+```
+
+判定规则：tool-result 通道的回答**说出探针颜色** = 声明已过时，走
+SKILL.md Pitfalls 的"声明过时"修正流程；200 但说不出颜色 = 接受但看不见；
+400 = 声明仍准确（内容/格式错误体）或型号已下线（型号错误体——非通道证据）。
 
 ### 判定读法 —— 决策矩阵
 
