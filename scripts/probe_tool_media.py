@@ -39,6 +39,7 @@ import zlib
 # provider -> default OpenAI-compatible base url (extend when needed)
 _DEFAULT_BASE_URLS = {
     "xiaomi": "https://api.xiaomimimo.com/v1",
+    "intern-inkstone": "https://discovery-api.intern-ai.org.cn/v1",
 }
 
 
@@ -126,7 +127,16 @@ def main() -> int:
 
     kv = load_env_kv(home)
     up = provider.upper().replace("-", "_")
-    key = kv.get(f"{up}_API_KEY") or kv.get(f"{up.upper()}_API_KEY")
+    # candidate env var names in priority order: standard <PROV>_API_KEY,
+    # then truncated/odd prefixes some providers use (e.g. INTER_INKSTONE_
+    # for intern-inkstone — INKSTONE alone also seen)
+    stem = up.replace("_", "")
+    cands = [
+        f"{up}_API_KEY",
+        f"{up.upper()}_API_KEY",
+        f"{stem[:5]}_{up.split('_')[-1]}_API_KEY" if "_" in up else None,
+    ]
+    key = next((kv.get(c) for c in cands if c and kv.get(c)), None)
     base = kv.get(f"{up}_BASE_URL") or _DEFAULT_BASE_URLS.get(provider)
     if not key:
         print(f"no API key found in {home}/.env (looked for {up}_API_KEY) - refusing to guess")

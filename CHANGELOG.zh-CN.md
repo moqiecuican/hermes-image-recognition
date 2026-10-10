@@ -6,6 +6,46 @@
 
 > 🌏 [English (CHANGELOG.md)](CHANGELOG.md)
 
+## [0.5.0] - 2026-10-10
+
+### 新增
+- `check_vision_path.py` 会话运行时模型解析 —— /model 热切换大坑从"文档
+  警告"升级为"已解决的工具能力"：
+  - `--session <id>`：权威运行时模型对，来自
+    `<hermes-home>/state.db` → `session_model_usage`（task='' 为主对话；
+    只读连接 + schema 校验；上游 schema 漂移时明确报 "schema mismatch"，
+    绝不静默输出错误结论）。
+  - `--anchor '<消息前缀>'`：用消息前缀 grep `agent.log` turn_context
+    行，再经 session_model_usage 确认；日志与库不一致时打印
+    DISCREPANCY 并自动采用更新的一对。
+  - 无参双视角：config 主模型 + 最近活跃会话并排展示；MISMATCH 块主动
+    揭示热切换（展示用启发式；多个并发 TUI 窗口 = 多个会话）。
+  - 鲁棒性：state.db 只读打开（WAL 安全）、每个失败形态（未知会话、
+    锚点未命中、坏 flag）都有明确报错 + 降级建议、按实测日志限制实现
+    （msg= 截断 ~90 字符 / 仅首行 / ~5 MB 轮转）。
+- 两条新 Pitfall，来自 2026-10-10 实战事故（config override 把纯文本
+  模型误声明为多模态）：
+  - "'native 首行'是声明，不是交付证明"：运行时工具门禁同样读 CONFIG
+    模型对，热切换会话里它可能给看不见图的的原模型包一层原生信封——
+    首行照样说 `Image loaded`，发送路径却静默丢掉像素。会话内证据才算
+    数：回答须反映像素，且下一次 API 调用的入参须增长图片量级的 token
+    （0.2 MB 真图 +数千 vs 剥离注记 +数百）。
+  - "`supports_vision` override 是假设——先实测再信任"：写错方向的
+    `true` 是过时 veto 的镜像（xiaomi 案例）：过时 veto 只是诚实地挡路，
+    假 `true` 会主动误路由。要求端点限定命名——同一模型家族可在不同
+    端点多模态/纯文本并存（deepseek-flash @ deepseek vs 聚合端点的
+    deepseek-v4-flash-0731 / glm-5.3 类）。
+- Registry：intern-inkstone/glm-5.3 的 NEGATIVE 条目（10-10 两次真图
+  实测失败后移除 override；models.dev 30+ provider 一致 text-only）与
+  intern-inkstone/deepseek-v4-flash-vision 的 UNVERIFIED 条目（已声明，
+  但该模型无法发出有效工具调用、验证未完成）。
+- `probe_tool_media.py`：非标准环境变量名兜底（如 intern-inkstone 对应
+  `INTER_INKSTONE_API_KEY`）+ intern-inkstone base-url 默认值。
+
+### 变更
+- 发布前从 0.4.1 升到 0.5.0：本版范围（新 CLI 模式、新文档章节、新
+  验证方法论）是 minor bump，不是 patch。
+
 ## [0.4.0] - 2026-10-10
 
 ### 新增

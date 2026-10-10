@@ -95,6 +95,17 @@ tool-result image content 400s.
 - **One-command diagnosis** — `check_vision_path.py` prints a four-line
   verdict (image input route / tool-result images / model vision / final
   path) for your active model or any provider+model pair
+- **Session runtime model** — after a mid-session `/model` hot-swap, the
+  checker resolves the session's ACTUAL pair: `--session <id>` (read from
+  the session usage database, authoritative), `--anchor '<message
+  prefix>'` (locates the session via the log, then confirms), and a
+  no-args dual view that flags config-vs-session mismatches unprompted
+- **Delivery-proof methodology** — the native "first line" is a
+  declaration, not delivery proof: in a hot-swapped session the runtime
+  gate reads the config pair and can misroute. Verify with in-session
+  evidence (answer reflects pixels + next API call grows by image-size
+  tokens) and treat every `supports_vision` override as an assumption to
+  test, never as evidence
 - **Endpoint arbitration** — `probe_tool_media.py` runs the decisive
   two-request probe (1×1 red PNG, both image channels) that proves or
   disproves a provider tool-result veto at the endpoint instead of

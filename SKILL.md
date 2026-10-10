@@ -1,7 +1,7 @@
 ---
 name: image-recognition
 description: "View images natively and diagnose vision path issues."
-version: 0.4.0
+version: 0.5.0
 author: moqiecuican
 license: MIT
 platforms: [linux, macos, windows]
@@ -169,7 +169,14 @@ lossy fallback path degrades every image judgement in the session (real case:
 frame, all caused by the aux paraphrase path — one config line would have
 prevented it). Gate once per session / after any model switch, not per call.
 
-1. Run `scripts/check_vision_path.py` (see Quick Reference).
+1. Run `scripts/check_vision_path.py` (see Quick Reference). If the session
+   has hot-swapped the model (`/model`), resolve the ACTUAL pair first
+   (`--anchor` with the current message prefix, or `--session <id>`) —
+   the no-args verdict describes the config pair, not the session's.
+   Caveat: the runtime tool gate ALSO reads the config pair (see the
+   "declaration, not delivery proof" Pitfall), so for a hot-swapped
+   session the final word on the ACTIVE path is a real-image test inside
+   the session, not the checker verdict alone.
 2. Verdict NATIVE → proceed. If `references/confirmed-vision-models.md`
    already lists this provider/model with a date, you may skip step 1 this
    session.
@@ -255,12 +262,60 @@ User-attached images (CLI / TUI / messaging platforms) follow
 
 ## Quick Reference
 ```bash
-# No args = current main provider/model; two args = any provider/model pair
+# No args = CONFIG main model + most-recent active session (dual view;
+#           a MISMATCH block means a session hot-swapped away from config)
 <hermes-home>/hermes-agent/venv/bin/python <skill-dir>/scripts/check_vision_path.py
-<hermes-home>/hermes-agent/venv/bin/python <skill-dir>/scripts/check_vision_path.py zai glm-5.3-flash
+# A session's ACTUAL runtime pair (authoritative; resolves /model hot-swaps)
+<hermes-home>/hermes-agent/venv/bin/python <skill-dir>/scripts/check_vision_path.py --session <session-id>
+# Locate the session via a user-message prefix, then confirm + verdict
+<hermes-home>/hermes-agent/venv/bin/python <skill-dir>/scripts/check_vision_path.py --anchor '<first ~60 chars of the message>'
+# Two args = any provider/model pair
+<hermes-home>/hermes-agent/venv/bin/python <skill-dir>/scripts/check_vision_path.py <provider> <model>
 # Endpoint-level arbitration when a profile veto looks stale (same args)
 <hermes-home>/hermes-agent/venv/bin/python <skill-dir>/scripts/probe_tool_media.py <provider> <model>
 ```
+
+## Session runtime model (the /model hot-swap trap)
+
+A chat `/model` hot-swap is per-session runtime state that never writes
+`config.yaml`, so a fresh checker subprocess reports the CONFIG pair while
+the session runs another model entirely. The no-args checker answers
+"what does config say", NOT "what does my session run" — the two only
+coincide when no hot-swap happened.
+
+Resolving the session's ACTUAL pair, in order of authority:
+
+1. **`--session <id>`** — authoritative. Source:
+   `<hermes-home>/state.db`, table `session_model_usage`
+   (`SELECT model, billing_provider, last_seen FROM session_model_usage
+   WHERE session_id = ? AND task = '' ORDER BY last_seen DESC LIMIT 1`;
+   `task=''` is the main conversation — rows with task
+   vision/approval/background_review/title_generation are auxiliary
+   calls, NOT the main model). The checker opens state.db READ-ONLY
+   (python `sqlite3` module; no sqlite3 CLI is needed) and validates the
+   schema first — a schema drift surfaces as an explicit "schema
+   mismatch" error, never silently wrong output.
+   **Freshness boundary**: `last_seen` marks the LAST API call, not the
+   intent — a hot-swap becomes visible there only after the next message
+   is sent.
+2. **`--anchor '<message prefix>'`** — grep `agent.log` `turn_context`
+   lines (written BEFORE the turn's tools run) with the first ~60 chars
+   of the current user message, then CONFIRM the hit against
+   `session_model_usage` (a log hit alone is a hint: log lines carry
+   stale info right after a hot-swap; the checker prints DISCREPANCY and
+   uses the newer pair automatically). Measured log limits: `msg=` field
+   truncates at ~90 chars, keeps only the FIRST line of a multiline
+   message, and logs rotate at ~5 MB — so use a prefix of the first
+   line, and treat not-found as "anchor failed", never as "session has
+   no records".
+3. **No-args dual view** — the checker also shows the most-recent active
+   session (by `last_seen`) next to the config pair; a MISMATCH block
+   flags hot-swaps even when nobody asked. This is a heuristic for
+   DISPLAY only: multiple concurrent TUI windows = multiple session ids
+   and "most recent" may not be "yours". Confirm with `--session`.
+
+Env vars do NOT carry the session id — tool subprocesses have no session
+identity; the paths above are the only reliable sources.
 
 ## Procedure: self-check after switching models
 1. Run the diagnostic script → completion criterion: the four-line verdict
@@ -379,6 +434,39 @@ User-attached images (CLI / TUI / messaging platforms) follow
   read: re-view a crop (`region=`) first and treat both paths' opinions as
   hypotheses. For geometry/coverage acceptance, prefer objective pixel
   sampling or frame hashing over any vision-model opinion.
+- **The "native first line" is a declaration, not delivery proof.** The
+  tool-side gate (`_should_use_native_vision_fast_path`) reads the CONFIG
+  main pair, not the session's hot-swapped model, so in a hot-swapped
+  session it can wrap an image for a model that cannot see it: the first
+  line still says `Image loaded into your context` while the send path
+  silently drops the pixels (observed twice, 2026-10-10: hot-swap to a
+  text-only model — first line "native", body carrying
+  `[attachment omitted: ... does not accept multimodal input]`). The only
+  authoritative check is IN-SESSION evidence: did the answer reflect the
+  pixels, and did the request actually grow by image-size tokens?
+  Diagnostic signature of a misroute: the tool body contains an
+  "attachment omitted / does not accept multimodal input" note.
+  Token-delta heuristic: a real 0.2–0.3 MB image adds THOUSANDS of input
+  tokens to the next API call; a stripped/replaced image adds only
+  hundreds (the note text). Trust the checker's session verdict
+  (`--session`/`--anchor`) + a real-image test over the tool's first line.
+- **`supports_vision` overrides are assumptions — test before trusting
+  them.** An override is a USER/maintainer hypothesis, not evidence.
+  Written the WRONG direction it is more dangerous than a stale veto:
+  a stale veto merely blocks a working fast path (capability lost, but
+  honest), while a false `true` makes the gate actively wrap images for a
+  model that cannot see them (confident misroute, silent pixel loss).
+  glm-5.3 vs the xiaomi stale-veto case are mirror images of the same
+  principle: declarations are hypotheses, probes/real-image tests are
+  truth. After writing ANY override: run the checker (expect NATIVE), run
+  the decisive probe if the endpoint is unfamiliar, and do a real-image
+  test with the token-delta check — all three before relying on the path.
+  Endpoint-qualified naming matters: the same model family can be
+  multimodal on one endpoint and text-only on another (observed:
+  `deepseek-flash` @ deepseek is multimodal; `deepseek-v4-flash-0731` /
+  glm-5.3-class models on aggregator endpoints are text-only) — registry
+  and config records must always name the provider, never the bare model
+  id.
 - **Do not delete `auxiliary.vision`**: it backs the fallback paraphrase
   for text-only models, the legacy path when the fast path does not fire,
   and auto-describing images already in history

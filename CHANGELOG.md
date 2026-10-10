@@ -6,6 +6,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > 🌏 [中文版（CHANGELOG.zh-CN.md）](CHANGELOG.zh-CN.md)
 
+## [0.5.0] - 2026-10-10
+
+### Added
+- Session runtime model resolution in `check_vision_path.py` — the /model
+  hot-swap trap is now a solved problem instead of a documented caveat:
+  - `--session <id>`: authoritative runtime pair from
+    `<hermes-home>/state.db` → `session_model_usage` (task='' is the main
+    conversation; read-only connection + schema validation; explicit
+    "schema mismatch" error on upstream drift, never silently wrong
+    output).
+  - `--anchor '<message prefix>'`: greps `agent.log` turn_context lines
+    with the message prefix, then CONFIRMS against session_model_usage;
+    on log/DB discrepancy prints DISCREPANCY and uses the newer pair.
+  - No-args dual view: config main model + most-recent active session
+    side by side; a MISMATCH block flags hot-swaps unprompted (heuristic
+    for display; multiple concurrent TUI windows = multiple sessions).
+  - Robustness: read-only DB open (WAL-safe), explicit errors with
+    fallback suggestions for every failure mode (unknown session, anchor
+    miss, bad flags), measured log limits respected (msg= truncates ~90
+    chars / first line only / ~5 MB rotation).
+- Two new Pitfalls from the 2026-10-10 live incident (a config override
+  declared a text-only model as vision-capable):
+  - "The native first line is a declaration, not delivery proof": the
+    runtime tool gate also reads the CONFIG pair, so in a hot-swapped
+    session it can wrap images for a model that cannot see them — the
+    first line says `Image loaded` while the send path silently drops
+    the pixels. In-session evidence rules: the answer must reflect the
+    pixels, and the next API call must grow by image-size tokens
+    (thousands for a real 0.2 MB image vs hundreds for a stripped note).
+  - "`supports_vision` overrides are assumptions — test before trusting
+    them": a false `true` is the mirror image of a stale veto (xiaomi
+    case): a stale veto honestly blocks a working path, a false true
+    actively misroutes. Endpoint-qualified naming required — the same
+    family can be multimodal on one endpoint and text-only on another
+    (deepseek-flash @ deepseek vs deepseek-v4-flash-0731 /
+    glm-5.3-class on aggregators).
+- Registry: negative entry for intern-inkstone/glm-5.3 (override removed
+  2026-10-10 after two failed real-image tests; models.dev confirms
+  text-only across 30+ providers) and an UNVERIFIED entry for
+  intern-inkstone/deepseek-v4-flash-vision (declared, but the model
+  could not issue valid tool calls to complete verification).
+- `probe_tool_media.py`: non-standard env-var key fallback (e.g.
+  `INTER_INKSTONE_API_KEY` for intern-inkstone) + base-url default for
+  intern-inkstone.
+
+### Changed
+- Bumped 0.4.1 → 0.5.0 before release: the scope (new CLI modes, new
+  document section, new verification methodology) is a minor bump, not a
+  patch.
+
+### Added
+- Session runtime model resolution in `check_vision_path.py` — the /model
+  hot-swap trap is now a solved problem instead of a documented caveat:
+  - `--session <id>`: authoritative runtime pair from
+    `<hermes-home>/state.db` → `session_model_usage` (task='' is the main
+    conversation; read-only connection + schema validation; explicit
+    "schema mismatch" error on upstream drift, never silently wrong
+    output).
+  - `--anchor '<message prefix>'`: greps `agent.log` turn_context lines
+    with the message prefix, then CONFIRMS against session_model_usage;
+    on log/DB discrepancy prints DISCREPANCY and uses the newer pair.
+  - No-args dual view: config main model + most-recent active session
+    side by side; a MISMATCH block flags hot-swaps unprompted (heuristic
+    for display; multiple concurrent TUI windows = multiple sessions).
+  - Freshness boundary documented in output and docs: `last_seen` marks
+    the last API call — a hot-swap appears only after the next message.
+  - Robustness: read-only DB open (WAL-safe), explicit errors with
+    fallback suggestions for every failure mode (unknown session, anchor
+    miss, bad flags), measured log limits respected (msg= truncates ~90
+    chars / first line only / ~5 MB rotation).
+
 ## [0.4.0] - 2026-10-10
 
 ### Added

@@ -80,3 +80,32 @@ the date, the evidence, and the config key that carries the declaration.
   process keeps the old profile in its module cache until THAT process
   restarts — a new session inside the same process does not reload plugin
   Python, so real-image acceptance must run in the restarted process.
+
+## intern-inkstone / glm-5.3 — NEGATIVE (do not declare vision)
+- Status: 2026-10-10, confirmed TEXT-ONLY by user (the config override was
+  a misremembering) and by two failed real-image tests.
+- History: a `model_overrides.intern-inkstone."glm-5.3".supports_vision:
+  true` record made both the checker and the runtime gate claim NATIVE,
+  but two in-session real-image tests (2026-10-10) showed the image never
+  reached the model: tool body carried
+  `[attachment omitted: ... does not accept multimodal input]` and the
+  next API call grew only +172/+216 input tokens (a real 0.2 MB image
+  adds thousands). The override was removed the same day; the checker
+  verdict flipped NATIVE → FALLBACK, matching models.dev (30+ providers
+  list glm-5.3 as `attachment: false, input: [text]`).
+- Lesson: a false `supports_vision: true` is the mirror image of a stale
+  veto — declarations are hypotheses; the token-delta check exposes the
+  truth. models.dev is the default truth for glm-5.3: text-only.
+
+## intern-inkstone / deepseek-v4-flash-vision — DECLARED, UNVERIFIED
+- Status: 2026-10-10, declared `supports_vision: true` in config (the
+  vision-specific model id on this endpoint); real-image verification
+  could NOT be completed — the model failed to issue valid tool calls at
+  all in-session (broken tool-calling behavior), so no native-path
+  evidence exists either way.
+- Treat as unverified: before relying on it as a vision main model, run
+  the checker + probe_tool_media.py + a real-image test (see SKILL.md
+  "overrides are assumptions" Pitfall).
+- Related: the same endpoint's `deepseek-v4-flash-0731` (no -vision
+  suffix) is TEXT-ONLY (models.dev); vision on this endpoint requires the
+  -vision id.
