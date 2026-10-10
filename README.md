@@ -261,6 +261,27 @@ chain.
 **Does `native` crash on a text-only model?**
 No — a last-chance text fallback converts/strips image parts at API time.
 
+## Limitations — please tell me when this fails
+
+Hermes's vision subsystem is still relatively primitive and imperfect by
+design: two image channels, capability tables, plugin profiles, per-model
+quirks — and it all moves as upstream Hermes changes, which it does often.
+Against that moving target, two honest caveats:
+
+- **This skill may not cover every situation.** The diagnosis method
+  (verdict → probe → evidence) is designed to stay valid when details
+  shift, but no document can anticipate every provider, endpoint, or
+  model quirk in advance.
+- **Updates may lag behind reality.** Upstream can change first; flows
+  verified today may be stale tomorrow.
+
+If anything does not work, does not match the docs, or puzzles you —
+please open an issue and describe what you saw. Every report is welcome,
+including "this worked fine" notes.
+
+This release is developed and tested against **Hermes 0.21.5**. Findings
+from other versions are especially valuable.
+
 ## Contributing
 
 Issues and PRs welcome. Please run the diagnostic script before and after
